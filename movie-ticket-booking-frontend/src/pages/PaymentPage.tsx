@@ -18,7 +18,7 @@ export const PaymentPage: React.FC = () => {
   const [cardNumber, setCardNumber] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // Seat Selection faild then back
+  // Seat Selection failed then back
   if (!bookingData) {
     return (
       <div className="container mt-5 text-center">
@@ -37,6 +37,23 @@ export const PaymentPage: React.FC = () => {
     // Payment Processing Mocking 
     setTimeout(() => {
       setIsProcessing(false);
+
+      // 1. nev Booking Object එ
+      const newBooking = {
+        id: `BK-${Math.floor(1000 + Math.random() * 9000)}`,
+        movieTitle: bookingData.movieTitle || 'Movie Ticket',
+        showTime: bookingData.selectedTime,
+        seats: bookingData.selectedSeats,
+        totalAmount: bookingData.totalAmount,
+        status: 'CONFIRMED',
+        createdAt: new Date().toISOString(), // Time-based restriction
+      };
+
+      
+      const existingBookings = JSON.parse(localStorage.getItem('my_bookings') || '[]');
+      const updatedBookings = [newBooking, ...existingBookings];
+      localStorage.setItem('my_bookings', JSON.stringify(updatedBookings));
+
       alert(`Payment Successful! Your tickets for ${bookingData.selectedSeats.join(', ')} are booked.`);
       navigate('/my-bookings'); 
     }, 2000);
