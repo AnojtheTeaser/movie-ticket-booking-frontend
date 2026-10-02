@@ -1,11 +1,15 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { movieService } from '../services/movieService';
+import type { BookingDTO, PaymentDTO, BookingStatus, PaymentMethod, PaymentStatus } from '../types';
 
 interface BookingState {
   movieId: string;
-  movieTitle: string;
+  showId: number;
+  movieTitle?: string;
   selectedTime: string;
   selectedSeats: string[];
+  ticketPrice: number;
   totalAmount: number;
 }
 
@@ -17,8 +21,8 @@ export const PaymentPage: React.FC = () => {
   const [cardHolder, setCardHolder] = useState('');
   const [cardNumber, setCardNumber] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Seat Selection failed then back
   if (!bookingData) {
     return (
       <div className="container mt-5 text-center">
@@ -30,33 +34,48 @@ export const PaymentPage: React.FC = () => {
     );
   }
 
-  const handlePayment = (e: React.FormEvent) => {
+  const handlePayment = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsProcessing(true);
+    setErrorMessage(null);
 
-    // Payment Processing Mocking 
-    setTimeout(() => {
-      setIsProcessing(false);
+    try {
+      const storedUserId = localStorage.getItem('userId');
+      const userId = storedUserId ? Number(storedUserId) : 1;
 
-      // 1. nev Booking Object එ
-      const newBooking = {
-        id: `BK-${Math.floor(1000 + Math.random() * 9000)}`,
-        movieTitle: bookingData.movieTitle || 'Movie Ticket',
-        showTime: bookingData.selectedTime,
-        seats: bookingData.selectedSeats,
+      // 1. Create Booking in Backend
+      const newBookingData: BookingDTO = {
+        userId: userId,
+        showId: Number(bookingData.showId),
+        seatNumbers: bookingData.selectedSeats,
+        numberOfTickets: bookingData.selectedSeats.length,
         totalAmount: bookingData.totalAmount,
-        status: 'CONFIRMED',
-        createdAt: new Date().toISOString(), // Time-based restriction
+        status: 'PENDING' as BookingStatus
       };
 
-      
-      const existingBookings = JSON.parse(localStorage.getItem('my_bookings') || '[]');
-      const updatedBookings = [newBooking, ...existingBookings];
-      localStorage.setItem('my_bookings', JSON.stringify(updatedBookings));
+      const bookingResponse = await movieService.createBooking(newBookingData);
 
-      alert(`Payment Successful! Your tickets for ${bookingData.selectedSeats.join(', ')} are booked.`);
-      navigate('/my-bookings'); 
-    }, 2000);
+      if (bookingResponse && bookingResponse.id) {
+        // 2. Process Payment in Backend
+        const paymentData: PaymentDTO = {
+          bookingId: bookingResponse.id,
+          amount: bookingData.totalAmount,
+          paymentMethod: 'CARD' as PaymentMethod,
+          status: 'COMPLETED' as PaymentStatus
+        };
+
+        await movieService.processPayment(paymentData);
+
+        alert(`Payment Successful! Your tickets for ${bookingData.selectedSeats.join(', ')} are booked.`);
+        navigate('/my-bookings');
+      } else {
+        setErrorMessage('Failed to create booking. Please try again.');
+      }
+    } catch (err: any) {
+      setErrorMessage(err.response?.data?.message || 'Payment processing failed. Please check backend network connection.');
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
@@ -66,6 +85,12 @@ export const PaymentPage: React.FC = () => {
       </button>
 
       <h2 className="text-center fw-bold mb-4">Payment & Confirmation 💳</h2>
+
+      {errorMessage && (
+        <div className="alert alert-danger text-center" role="alert">
+          {errorMessage}
+        </div>
+      )}
 
       <div className="row g-4">
         {/* Booking Summary Card */}

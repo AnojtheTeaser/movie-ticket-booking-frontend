@@ -5,6 +5,7 @@ import { authService } from '../services/authService';
 export const Register: React.FC = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
@@ -19,11 +20,18 @@ export const Register: React.FC = () => {
     setLoading(true);
 
     try {
-      await authService.register({ name, email, password });
+      await authService.register({
+        name,
+        email,
+        phone,
+        password,
+        role: 'CUSTOMER'
+      });
+      
       setSuccess('Registration successful! Redirecting to login...');
-      setTimeout(() => navigate('/login'), 2000);
+      setTimeout(() => navigate('/login'), 1500);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Registration failed');
+      setError(typeof err.response?.data === 'string' ? err.response.data : 'Registration failed');
     } finally {
       setLoading(false);
     }
@@ -58,6 +66,17 @@ export const Register: React.FC = () => {
                   className="form-control"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className="mb-3">
+                <label className="form-label">Phone Number</label>
+                <input
+                  type="text"
+                  className="form-control"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
                   required
                 />
               </div>

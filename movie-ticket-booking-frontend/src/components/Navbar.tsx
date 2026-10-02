@@ -9,7 +9,7 @@ export const Navbar: React.FC = () => {
   const handleLogout = () => {
     if (auth) {
       auth.logout();
-      navigate('/login');
+      navigate('/'); 
     }
   };
 
@@ -35,15 +35,17 @@ export const Navbar: React.FC = () => {
               <Link className="nav-link" to="/">Home</Link>
             </li>
 
-            {/* User Log වුණාම 'My Bookings' Link එක පෙන්නනවා */}
-            <li className="nav-item">
-              <Link className="nav-link" to="/my-bookings">
-                My Bookings 🎟️
-              </Link>
-            </li>
+            {/* shows booking only when loging */}
+            {auth?.isAuthenticated && (
+              <li className="nav-item">
+                <Link className="nav-link" to="/my-bookings">
+                  My Bookings 🎟️
+                </Link>
+              </li>
+            )}
 
-            {/* Admin කෙනෙක් නම් විතරක් 'Admin Panel' Link එක පෙන්නනවා */}
-            {auth?.user?.role === 'ADMIN' && (
+            {/* show admin panel for only admin */}
+            {auth?.isAuthenticated && auth?.user?.role === 'ADMIN' && (
               <li className="nav-item">
                 <Link className="nav-link text-warning fw-bold" to="/admin">
                   Admin Panel ⚙️

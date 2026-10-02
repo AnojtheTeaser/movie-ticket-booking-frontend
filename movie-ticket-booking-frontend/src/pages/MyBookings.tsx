@@ -1,65 +1,53 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-
-interface Booking {
-  id: string;
-  movieTitle: string;
-  showTime: string;
-  seats: string[];
-  totalAmount: number;
-  status: 'CONFIRMED' | 'CANCELLED';
-  createdAt?: string;
-  date?: string;
-}
+import { movieService } from '../services/movieService';
+import type { BookingDTO, BookingStatus } from '../types';
 
 export const MyBookings: React.FC = () => {
   const navigate = useNavigate();
-  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [bookings, setBookings] = useState<BookingDTO[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // when Page load get data from localStorage 
   useEffect(() => {
-    const savedBookings = JSON.parse(localStorage.getItem('my_bookings') || '[]');
-    
-    // if no any Initial sample data show default 
-    if (savedBookings.length === 0) {
-      const defaultBooking: Booking[] = [
-        {
-          id: 'BK-1001',
-          movieTitle: 'Avatar: The Way of Water',
-          showTime: '10:30 AM',
-          seats: ['A1', 'A2', 'A3', 'A4', 'A5'],
-          totalAmount: 5000,
-          status: 'CONFIRMED',
-          createdAt: new Date().toISOString(),
-        },
-      ];
-      setBookings(defaultBooking);
-      localStorage.setItem('my_bookings', JSON.stringify(defaultBooking));
-    } else {
-      setBookings(savedBookings);
-    }
+    const storedUserId = localStorage.getItem('userId');
+    const userId = storedUserId ? Number(storedUserId) : 1;
+
+    setLoading(true);
+    movieService.getBookingsByUserId(userId)
+      .then((data) => {
+        setBookings(data);
+      })
+      .catch(() => {
+        setError('Failed to fetch bookings from backend.');
+      })
+      .finally(() => {
+        setLoading(false);
+      });
   }, []);
 
-  // Time-based Rule 60m Check 
-  const isEligibleForCancellation = (createdAt?: string) => {
-    if (!createdAt) return true; // for old sample data 
-    const bookingTime = new Date(createdAt).getTime();
-    const currentTime = new Date().getTime();
-    const diffInMinutes = (currentTime - bookingTime) / (1000 * 60);
-    return diffInMinutes <= 60; // between 60m its true
+  const isEligibleForCancellation = (bookingTime?: string) => {
+    if (!bookingTime) return true;
+    const bTime = new Date(bookingTime).getTime();
+    const cTime = new Date().getTime();
+    const diffInMinutes = (cTime - bTime) / (1000 * 60);
+    return diffInMinutes <= 60;
   };
 
-  // Booking  Cancel & localStorage Update 
-  const handleCancelBooking = (bookingId: string) => {
+  const handleCancelBooking = (bookingId?: number) => {
+    if (!bookingId) return;
     if (window.confirm('Are you sure you want to cancel this booking?')) {
       const updatedBookings = bookings.map((b) =>
-        b.id === bookingId ? { ...b, status: 'CANCELLED' as const } : b
+        b.id === bookingId ? { ...b, status: 'CANCELLED' as BookingStatus } : b
       );
       setBookings(updatedBookings);
-      localStorage.setItem('my_bookings', JSON.stringify(updatedBookings));
       alert('Booking cancelled successfully!');
     }
   };
+
+  if (loading) {
+    return <div className="text-center mt-5 fs-5">Loading Your Bookings...</div>;
+  }
 
   return (
     <div className="container mt-4 mb-5">
@@ -70,6 +58,12 @@ export const MyBookings: React.FC = () => {
         </button>
       </div>
 
+      {error && (
+        <div className="alert alert-danger text-center mb-4" role="alert">
+          {error}
+        </div>
+      )}
+
       {bookings.length === 0 ? (
         <div className="text-center my-5 p-5 bg-light rounded shadow-sm">
           <h5>No bookings found in your history!</h5>
@@ -78,16 +72,18 @@ export const MyBookings: React.FC = () => {
       ) : (
         <div className="row g-3">
           {bookings.map((booking) => {
-            const canCancel = isEligibleForCancellation(booking.createdAt);
+            const canCancel = isEligibleForCancellation(booking.bookingTime);
 
             return (
               <div key={booking.id} className="col-md-6">
                 <div className="card shadow-sm border-0 p-3">
                   <div className="d-flex justify-content-between align-items-center mb-2">
-                    <h5 className="fw-bold mb-0">{booking.movieTitle}</h5>
+                    <h5 className="fw-bold mb-0">Booking #{booking.id}</h5>
                     <span
                       className={`badge ${
-                        booking.status === 'CONFIRMED' ? 'bg-success' : 'bg-danger'
+                        booking.status === 'CONFIRMED' || booking.status === 'PENDING'
+                          ? 'bg-success'
+                          : 'bg-danger'
                       }`}
                     >
                       {booking.status}
@@ -95,22 +91,22 @@ export const MyBookings: React.FC = () => {
                   </div>
 
                   <p className="mb-1 text-muted">
-                    <strong>Booking ID:</strong> {booking.id}
+                    <strong>Show ID:</strong> {booking.showId}
                   </p>
                   <p className="mb-1">
-                    <strong>Show Time:</strong> {booking.showTime} {booking.date ? `(${booking.date})` : ''}
+                    <strong>Tickets Count:</strong> {booking.numberOfTickets}
                   </p>
                   <p className="mb-1">
                     <strong>Seats:</strong>{' '}
                     <span className="text-primary fw-bold">
-                      {booking.seats.join(', ')}
+                      {booking.seatNumbers ? booking.seatNumbers.join(', ') : 'N/A'}
                     </span>
                   </p>
                   <p className="mb-3">
                     <strong>Total Paid:</strong> LKR {booking.totalAmount}
                   </p>
 
-                  {booking.status === 'CONFIRMED' && (
+                  {booking.status !== ('CANCELLED' as BookingStatus) && (
                     canCancel ? (
                       <button
                         className="btn btn-outline-danger btn-sm w-100"

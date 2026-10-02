@@ -1,31 +1,51 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { movieService } from '../services/movieService';
-import type { Movie } from '../services/movieService';
+import type { MovieDTO, ShowDTO, TheatreDTO } from '../types';
 
 export const MovieDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  
-  const [movie, setMovie] = useState<Movie | null>(null);
+
+  const [movie, setMovie] = useState<MovieDTO | null>(null);
+  const [shows, setShows] = useState<ShowDTO[]>([]);
+  const [theatres, setTheatres] = useState<TheatreDTO[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string>('');
 
   useEffect(() => {
-    const fetchMovie = async () => {
+    const fetchMovieDetails = async () => {
       if (!id) return;
+      setLoading(true);
       try {
-        const data = await movieService.getMovieById(Number(id));
-        setMovie(data);
+        const movieId = Number(id);
+        
+        const [movieData, showsData, theatresData] = await Promise.all([
+          movieService.getMovieById(movieId),
+          movieService.getShowsByMovieId ? movieService.getShowsByMovieId(movieId).catch(() => []) : [],
+          movieService.getAllTheatres ? movieService.getAllTheatres().catch(() => []) : []
+        ]);
+
+        setMovie(movieData);
+        setShows(showsData);
+        setTheatres(theatresData);
       } catch (err: any) {
+        console.error('Error fetching details:', err);
         setError('Failed to load movie details. Please check connection.');
       } finally {
         setLoading(false);
       }
     };
 
-    fetchMovie();
+    fetchMovieDetails();
   }, [id]);
+
+  const getTheatreName = (theatreId: number) => {
+    const theatre = theatres.find(t => (t.theatreId ?? t.id) === theatreId);
+    return theatre ? `${theatre.name} (${theatre.location})` : `Theatre #${theatreId}`;
+  };
+
+  const fallbackImage = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='400' viewBox='0 0 300 400'><rect width='100%' height='100%' fill='%23cccccc'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='20' fill='%23666666'>No Poster Available</text></svg>";
 
   if (loading) {
     return (
@@ -52,15 +72,14 @@ export const MovieDetails: React.FC = () => {
     );
   }
 
-  const fallbackImage = "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='400' viewBox='0 0 300 400'><rect width='100%' height='100%' fill='%23cccccc'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='20' fill='%23666666'>No Poster Available</text></svg>";
-
   return (
-    <div className="container mt-5">
+    <div className="container mt-5 mb-5">
       <button className="btn btn-outline-secondary mb-4" onClick={() => navigate(-1)}>
         &larr; Back
       </button>
 
-      <div className="card shadow border-0 overflow-hidden">
+      {/* Movie Details Card */}
+      <div className="card shadow border-0 overflow-hidden mb-5">
         <div className="row g-0">
           <div className="col-md-4">
             <img 
@@ -88,19 +107,48 @@ export const MovieDetails: React.FC = () => {
               <p className="card-text text-muted fs-5">
                 {movie.description || 'No description available for this movie.'}
               </p>
-
-              <div className="mt-auto pt-4">
-                <button 
-                  className="btn btn-success btn-lg px-5 fw-bold"
-                   onClick={() => navigate(`/movies/${movie.id || movie.movieId}/seats`)}
-                    >
-                     Book Seats Now 🎟️
-                </button>
-              </div>
             </div>
           </div>
         </div>
       </div>
+
+      {/* Showtimes & Theatre Selection Section */}
+      <h3 className="fw-bold mb-4">🎟️ Select Show & Theatre</h3>
+      {shows.length === 0 ? (
+        <div className="alert alert-warning text-center">
+          No shows currently scheduled for this movie. Please check back later!
+        </div>
+      ) : (
+        <div className="row g-3">
+          {shows.map((show) => {
+            const showId = show.showId ?? show.id;
+            const movieId = movie.movieId ?? movie.id;
+
+            return (
+              <div key={showId} className="col-md-6 col-lg-4">
+                <div className="card shadow-sm border-start border-primary border-4 p-3 h-100 d-flex flex-column justify-content-between">
+                  <div>
+                    <h5 className="fw-bold text-primary mb-2">
+                      🏛️ {getTheatreName(show.theatreId)}
+                    </h5>
+                    <p className="mb-1 text-muted">📅 Date: <strong>{show.showDate}</strong></p>
+                    <p className="mb-1 text-muted">⏰ Time: <strong>{show.showTime}</strong></p>
+                    <p className="mb-2 text-success fw-bold fs-5">
+                      LKR {show.ticketPrice} <small className="fs-6 text-muted">/ seat</small>
+                    </p>
+                  </div>
+                  <button 
+                    className="btn btn-success w-100 fw-bold mt-3"
+                    onClick={() => navigate(`/movies/${movieId}/seats`, { state: { selectedShowId: showId } })}
+                  >
+                    Select Seats 🎟️
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 };

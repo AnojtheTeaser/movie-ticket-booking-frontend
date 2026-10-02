@@ -3,6 +3,7 @@ import api from './api';
 export interface RegisterRequest {
   name: string;
   email: string;
+  phone: string;
   password: string;
   role?: string;
 }
@@ -14,37 +15,34 @@ export interface LoginRequest {
 
 export interface AuthResponse {
   token: string;
-  type?: string;
-  id?: number;
-  username?: string;
-  email?: string;
-  roles?: string[];
 }
 
 export const authService = {
-  // Register API Call
   register: async (data: RegisterRequest) => {
-    const response = await api.post('/auth/register', data);
+    const response = await api.post('/auth/register', {
+      name: data.name,
+      email: data.email,
+      phone: data.phone,
+      password: data.password,
+      role: 'CUSTOMER'
+    });
     return response.data;
   },
 
-  // Login API Call
   login: async (data: LoginRequest) => {
     const response = await api.post<AuthResponse>('/auth/login', data);
     if (response.data.token) {
       localStorage.setItem('token', response.data.token);
-      localStorage.setItem('user', JSON.stringify(response.data));
+      localStorage.setItem('user', JSON.stringify({ email: data.email }));
     }
     return response.data;
   },
 
-  // Logout
   logout: () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
   },
 
-  // get Current User details 
   getCurrentUser: () => {
     const userStr = localStorage.getItem('user');
     if (userStr) return JSON.parse(userStr);

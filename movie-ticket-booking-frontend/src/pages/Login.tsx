@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useContext } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { authService } from '../services/authService';
+import { AuthContext } from '../context/AuthContext';
 
 export const Login: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -8,6 +9,7 @@ export const Login: React.FC = () => {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
+  const auth = useContext(AuthContext);
   const navigate = useNavigate();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -16,10 +18,32 @@ export const Login: React.FC = () => {
     setLoading(true);
 
     try {
-      await authService.login({ email, password });
-      navigate('/'); // Redirect to home after login
+      const response = await authService.login({ email, password });
+
+      if (response.token) {
+        // Admin ද නැද්ද කියා Email/Response අනුව Role එක තීරණය කිරීම
+        const role = email === 'admindasun@gmail.com' ? 'ADMIN' : 'CUSTOMER';
+        
+        // AuthContext එක හරහා Global State Update කිරීම
+        if (auth) {
+          auth.login(response.token, email, role);
+        }
+
+        // Role එක අනුව Navigate කිරීම
+        if (role === 'ADMIN') {
+          navigate('/admin');
+        } else {
+          navigate('/');
+        }
+      } else {
+        setError('Login failed: Token not received');
+      }
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Invalid email or password');
+      setError(
+        typeof err.response?.data === 'string'
+          ? err.response.data
+          : 'Invalid email or password'
+      );
     } finally {
       setLoading(false);
     }
@@ -31,7 +55,7 @@ export const Login: React.FC = () => {
         <div className="col-md-6 col-lg-4">
           <div className="card shadow-sm p-4">
             <h3 className="text-center mb-4">Sign In</h3>
-            
+
             {error && <div className="alert alert-danger">{error}</div>}
 
             <form onSubmit={handleLogin}>
@@ -57,9 +81,9 @@ export const Login: React.FC = () => {
                 />
               </div>
 
-              <button 
-                type="submit" 
-                className="btn btn-primary w-100" 
+              <button
+                type="submit"
+                className="btn btn-primary w-100"
                 disabled={loading}
               >
                 {loading ? 'Signing in...' : 'Sign In'}

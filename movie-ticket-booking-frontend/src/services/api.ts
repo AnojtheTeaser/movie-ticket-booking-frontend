@@ -1,6 +1,5 @@
 import axios from 'axios';
 
-// Backend එක run වෙන Base URL එක (Spring Boot Server)
 const API_BASE_URL = 'http://localhost:8081/api';
 
 const api = axios.create({
@@ -10,7 +9,6 @@ const api = axios.create({
   },
 });
 
-// සෑම Request එකකටම JWT Token එක Auto Add කරන Interceptor එක
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem('token');
