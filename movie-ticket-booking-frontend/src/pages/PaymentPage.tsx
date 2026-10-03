@@ -7,6 +7,7 @@ interface BookingState {
   movieId: string;
   showId: number;
   movieTitle?: string;
+  selectedDate?: string;
   selectedTime: string;
   selectedSeats: string[];
   ticketPrice: number;
@@ -26,7 +27,8 @@ export const PaymentPage: React.FC = () => {
   if (!bookingData) {
     return (
       <div className="container mt-5 text-center">
-        <h4>No booking details found!</h4>
+        <h4 className="text-danger fw-bold">No booking details found!</h4>
+        <p className="text-muted">Please select your seats first.</p>
         <button className="btn btn-primary mt-3" onClick={() => navigate('/')}>
           Go to Home
         </button>
@@ -40,8 +42,21 @@ export const PaymentPage: React.FC = () => {
     setErrorMessage(null);
 
     try {
+      // Get User ID safely from LocalStorage
+      let userId = 1;
       const storedUserId = localStorage.getItem('userId');
-      const userId = storedUserId ? Number(storedUserId) : 1;
+      const storedUser = localStorage.getItem('user');
+
+      if (storedUserId) {
+        userId = Number(storedUserId);
+      } else if (storedUser) {
+        try {
+          const parsedUser = JSON.parse(storedUser);
+          userId = parsedUser.id || parsedUser.userId || 1;
+        } catch {
+          userId = 1;
+        }
+      }
 
       // 1. Create Booking in Backend
       const newBookingData: BookingDTO = {
@@ -53,26 +68,36 @@ export const PaymentPage: React.FC = () => {
         status: 'PENDING' as BookingStatus
       };
 
+      console.log("Sending Booking Data:", newBookingData);
       const bookingResponse = await movieService.createBooking(newBookingData);
+      console.log("Booking Response from Backend:", bookingResponse);
 
-      if (bookingResponse && bookingResponse.id) {
+      // Handle both `id` and `bookingId` dynamically
+      const createdBookingId = bookingResponse?.id ?? bookingResponse?.bookingId;
+
+      if (createdBookingId) {
         // 2. Process Payment in Backend
         const paymentData: PaymentDTO = {
-          bookingId: bookingResponse.id,
+          bookingId: createdBookingId,
           amount: bookingData.totalAmount,
           paymentMethod: 'CARD' as PaymentMethod,
           status: 'COMPLETED' as PaymentStatus
         };
 
+        console.log("Sending Payment Data:", paymentData);
         await movieService.processPayment(paymentData);
 
-        alert(`Payment Successful! Your tickets for ${bookingData.selectedSeats.join(', ')} are booked.`);
+        alert(`🎉 Payment Successful! Your tickets for seats [${bookingData.selectedSeats.join(', ')}] have been booked.`);
         navigate('/my-bookings');
       } else {
-        setErrorMessage('Failed to create booking. Please try again.');
+        setErrorMessage('Failed to create booking. Invalid ID returned from backend.');
       }
     } catch (err: any) {
-      setErrorMessage(err.response?.data?.message || 'Payment processing failed. Please check backend network connection.');
+      console.error("Payment error:", err);
+      setErrorMessage(
+        err.response?.data?.message || 
+        'Payment processing failed. Please check backend network connection or inputs.'
+      );
     } finally {
       setIsProcessing(false);
     }
@@ -87,7 +112,7 @@ export const PaymentPage: React.FC = () => {
       <h2 className="text-center fw-bold mb-4">Payment & Confirmation 💳</h2>
 
       {errorMessage && (
-        <div className="alert alert-danger text-center" role="alert">
+        <div className="alert alert-danger text-center shadow-sm" role="alert">
           {errorMessage}
         </div>
       )}
@@ -97,6 +122,12 @@ export const PaymentPage: React.FC = () => {
         <div className="col-md-5">
           <div className="card shadow-sm border-0 p-4 bg-light">
             <h4 className="fw-bold mb-3 border-bottom pb-2">Order Summary</h4>
+            {bookingData.selectedDate && (
+              <div className="d-flex justify-content-between mb-2">
+                <span className="text-muted">Show Date:</span>
+                <span className="fw-bold">{bookingData.selectedDate}</span>
+              </div>
+            )}
             <div className="d-flex justify-content-between mb-2">
               <span className="text-muted">Show Time:</span>
               <span className="fw-bold">{bookingData.selectedTime}</span>
@@ -160,7 +191,7 @@ export const PaymentPage: React.FC = () => {
 
               <button 
                 type="submit" 
-                className="btn btn-success btn-lg w-100 fw-bold"
+                className="btn btn-success btn-lg w-100 fw-bold shadow"
                 disabled={isProcessing}
               >
                 {isProcessing ? 'Processing Payment...' : `Pay LKR ${bookingData.totalAmount}`}

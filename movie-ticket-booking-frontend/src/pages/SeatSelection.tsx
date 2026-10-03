@@ -3,9 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { movieService } from '../services/movieService';
 import type { ShowDTO, TheatreDTO } from '../types';
 
-
 export const SeatSelection: React.FC = () => {
-  
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
@@ -22,12 +20,15 @@ export const SeatSelection: React.FC = () => {
     if (id) {
       setLoading(true);
 
-      // Fetch shows for the movie and all theatres for name/map lookup
+      // Fetch shows for movie and theatre data concurrently
       Promise.all([
         movieService.getShowsByMovieId(Number(id)),
         movieService.getAllTheatres()
       ])
         .then(([showsData, theatresData]) => {
+          console.log("Fetched Shows Data from Backend:", showsData);
+          console.log("Fetched Theatres Data from Backend:", theatresData);
+
           const tMap: Record<number, TheatreDTO> = {};
           if (Array.isArray(theatresData)) {
             theatresData.forEach((t) => {
@@ -43,7 +44,7 @@ export const SeatSelection: React.FC = () => {
           }
         })
         .catch((err) => {
-          console.error("Error loading shows:", err);
+          console.error("Error loading shows or theatres:", err);
           setError('Failed to load shows from backend.');
         })
         .finally(() => {
@@ -82,14 +83,20 @@ export const SeatSelection: React.FC = () => {
   const ticketPrice = selectedShow ? selectedShow.ticketPrice : 0;
   const totalAmount = selectedSeats.length * ticketPrice;
 
-  // Selected Show / Theatre Image Lookup
-  const currentTheatre = selectedShow?.theatreId ? theatresMap[selectedShow.theatreId] : null;
+  // Selected Show & Theatre Mapping
+  const currentTheatreId = selectedShow?.theatreId;
+  const currentTheatre = currentTheatreId ? theatresMap[currentTheatreId] : null;
+
+  // Capacity calculation with safety fallback
+  const rawCapacity = selectedShow?.capacity || currentTheatre?.capacity || 100;
+  const totalCapacity = Number(rawCapacity) > 0 ? Number(rawCapacity) : 100;
+
+  // Seat Map Image URL (from Show or Theatre)
   const seatMapUrl = selectedShow?.seatMapUrl || currentTheatre?.seatMapUrl;
 
-  // Fixed 100 Seats Setup (5 Rows x 20 Seats)
+  // Dynamic Seat Grid Generation (20 seats per row)
   const SEATS_PER_ROW = 20;
-  const TOTAL_SEATS = 100;
-  const totalSeatsArray = Array.from({ length: TOTAL_SEATS }, (_, i) => i + 1);
+  const totalSeatsArray = Array.from({ length: totalCapacity }, (_, i) => i + 1);
 
   const seatRows: number[][] = [];
   for (let i = 0; i < totalSeatsArray.length; i += SEATS_PER_ROW) {
@@ -102,7 +109,7 @@ export const SeatSelection: React.FC = () => {
         <div className="spinner-border text-primary" role="status">
           <span className="visually-hidden">Loading...</span>
         </div>
-        <p className="mt-2 text-muted">Loading Shows...</p>
+        <p className="mt-2 text-muted">Loading Shows & Seat Map...</p>
       </div>
     );
   }
@@ -136,6 +143,7 @@ export const SeatSelection: React.FC = () => {
             const isSelected = selectedShowId === currentShowId;
 
             const showTheatre = show.theatreId ? theatresMap[show.theatreId] : null;
+            const cap = show.capacity || showTheatre?.capacity || 'N/A';
             const tName = showTheatre?.name || (show.theatreId ? `Theatre ${show.theatreId}` : '');
 
             return (
@@ -152,7 +160,7 @@ export const SeatSelection: React.FC = () => {
                   📅 {show.showDate ? `${show.showDate}` : ''} | ⏰ {show.showTime}
                 </div>
                 <small className="d-block mt-1 text-muted">
-                  💵 LKR {show.ticketPrice}
+                  💵 LKR {show.ticketPrice} | 🪑 Capacity: {cap}
                 </small>
               </button>
             );
@@ -175,13 +183,14 @@ export const SeatSelection: React.FC = () => {
       <div className="text-center mb-4">
         <div 
           className="bg-dark text-white py-2 mx-auto rounded-3 shadow-sm mb-2 fw-bold" 
-          style={{ width: '90%', maxWidth: '800px', letterSpacing: '4px', borderBottom: '4px solid #0d6efd' }}
+          style={{ width: '90%', maxWidth: '850px', letterSpacing: '4px', borderBottom: '4px solid #0d6efd' }}
         >
           SCREEN THIS WAY 🎬
         </div>
+        <small className="text-muted fw-bold">Total Theatre Capacity: {totalCapacity} Seats</small>
       </div>
 
-      {/* Seat Grid - 5 Rows of 20 Seats */}
+      {/* Dynamic Seat Grid (20 per row) */}
       <div className="overflow-auto mb-4 pb-2">
         <div className="d-flex flex-column align-items-center" style={{ minWidth: '850px' }}>
           {seatRows.map((rowSeats, rowIndex) => (
