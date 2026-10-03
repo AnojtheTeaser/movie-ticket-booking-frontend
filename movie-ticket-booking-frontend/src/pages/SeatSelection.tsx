@@ -1,33 +1,49 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { movieService } from '../services/movieService';
-import type { ShowDTO } from '../types';
+import type { ShowDTO, TheatreDTO } from '../types';
+
 
 export const SeatSelection: React.FC = () => {
+  
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
   const [shows, setShows] = useState<ShowDTO[]>([]);
+  const [theatresMap, setTheatresMap] = useState<Record<number, TheatreDTO>>({});
   const [selectedShow, setSelectedShow] = useState<ShowDTO | null>(null);
   const [selectedSeats, setSelectedSeats] = useState<string[]>([]);
   const [bookedSeats, setBookedSeats] = useState<string[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-
-  const rows = ['A', 'B', 'C', 'D', 'E'];
-  const cols = [1, 2, 3, 4, 5, 6, 7, 8];
+  const [showMapModal, setShowMapModal] = useState<boolean>(false);
 
   useEffect(() => {
     if (id) {
       setLoading(true);
-      movieService.getShowsByMovieId(Number(id))
-        .then((data) => {
-          setShows(data || []);
-          if (data && data.length > 0) {
-            setSelectedShow(data[0]);
+
+      // Fetch shows for the movie and all theatres for name/map lookup
+      Promise.all([
+        movieService.getShowsByMovieId(Number(id)),
+        movieService.getAllTheatres()
+      ])
+        .then(([showsData, theatresData]) => {
+          const tMap: Record<number, TheatreDTO> = {};
+          if (Array.isArray(theatresData)) {
+            theatresData.forEach((t) => {
+              const tId = t.id ?? t.theatreId;
+              if (tId) tMap[tId] = t;
+            });
+          }
+          setTheatresMap(tMap);
+
+          setShows(showsData || []);
+          if (showsData && showsData.length > 0) {
+            setSelectedShow(showsData[0]);
           }
         })
-        .catch(() => {
+        .catch((err) => {
+          console.error("Error loading shows:", err);
           setError('Failed to load shows from backend.');
         })
         .finally(() => {
@@ -36,22 +52,25 @@ export const SeatSelection: React.FC = () => {
     }
   }, [id]);
 
-  // Selected Show එක වෙනස් වන විට අදාළ Booked Seats ලබාගැනීම (Backend Method එක ඇත්නම් පමණක්)
+  // Fetch booked seats when selected show changes
   useEffect(() => {
     if (selectedShow) {
-      setSelectedSeats([]); // Clear selected seats on show change
-      const showId = selectedShow.showId ?? selectedShow.id;
+      setSelectedSeats([]);
+      const showId = selectedShow.id ?? selectedShow.showId;
 
       if (showId && movieService.getBookedSeatsByShowId) {
         movieService.getBookedSeatsByShowId(showId)
-          .then((seats) => setBookedSeats(seats || []))
+          .then((seats) => {
+            const sanitizedSeats = (seats || []).map((s) => String(s).trim());
+            setBookedSeats(sanitizedSeats);
+          })
           .catch(() => setBookedSeats([]));
       }
     }
   }, [selectedShow]);
 
   const toggleSeat = (seatId: string) => {
-    if (bookedSeats.includes(seatId)) return; // Block clicking booked seats
+    if (bookedSeats.includes(seatId)) return;
 
     if (selectedSeats.includes(seatId)) {
       setSelectedSeats(selectedSeats.filter(s => s !== seatId));
@@ -62,6 +81,20 @@ export const SeatSelection: React.FC = () => {
 
   const ticketPrice = selectedShow ? selectedShow.ticketPrice : 0;
   const totalAmount = selectedSeats.length * ticketPrice;
+
+  // Selected Show / Theatre Image Lookup
+  const currentTheatre = selectedShow?.theatreId ? theatresMap[selectedShow.theatreId] : null;
+  const seatMapUrl = selectedShow?.seatMapUrl || currentTheatre?.seatMapUrl;
+
+  // Fixed 100 Seats Setup (5 Rows x 20 Seats)
+  const SEATS_PER_ROW = 20;
+  const TOTAL_SEATS = 100;
+  const totalSeatsArray = Array.from({ length: TOTAL_SEATS }, (_, i) => i + 1);
+
+  const seatRows: number[][] = [];
+  for (let i = 0; i < totalSeatsArray.length; i += SEATS_PER_ROW) {
+    seatRows.push(totalSeatsArray.slice(i, i + SEATS_PER_ROW));
+  }
 
   if (loading) {
     return (
@@ -91,82 +124,106 @@ export const SeatSelection: React.FC = () => {
         &larr; Back to Details
       </button>
 
-      <h2 className="text-center fw-bold mb-4">Select Your Seats 🎟️</h2>
+      <h2 className="text-center fw-bold mb-4">Select Your Seats 🎟</h2>
 
-      {/* Show Selection */}
+      {/* Show Selection Buttons */}
       <div className="card p-3 shadow-sm mb-4 border-0 bg-light">
-        <h5 className="fw-bold mb-3 text-center">Select Show Time</h5>
+        <h5 className="fw-bold mb-3 text-center">Select Show Date & Time</h5>
         <div className="d-flex justify-content-center flex-wrap gap-3">
-          {shows.map((show) => {
-            const currentShowId = show.showId ?? show.id;
-            const selectedShowId = selectedShow?.showId ?? selectedShow?.id;
+          {shows.map((show, index) => {
+            const currentShowId = show.id ?? show.showId ?? index;
+            const selectedShowId = selectedShow?.id ?? selectedShow?.showId;
             const isSelected = selectedShowId === currentShowId;
+
+            const showTheatre = show.theatreId ? theatresMap[show.theatreId] : null;
+            const tName = showTheatre?.name || (show.theatreId ? `Theatre ${show.theatreId}` : '');
 
             return (
               <button
                 key={currentShowId}
-                className={`btn ${isSelected ? 'btn-primary' : 'btn-outline-primary'} p-2 text-start`}
+                className={`btn ${isSelected ? 'btn-primary' : 'btn-outline-primary'} p-3 text-start shadow-sm`}
                 onClick={() => setSelectedShow(show)}
+                style={{ minWidth: '220px' }}
               >
-                <div className="fw-bold">{show.showTime}</div>
-                <small className="d-block text-muted">LKR {show.ticketPrice}</small>
+                <div className="fw-bold fs-6 mb-1">
+                  {tName ? `🏛 ${tName}` : ''}
+                </div>
+                <div className="fw-semibold">
+                  📅 {show.showDate ? `${show.showDate}` : ''} | ⏰ {show.showTime}
+                </div>
+                <small className="d-block mt-1 text-muted">
+                  💵 LKR {show.ticketPrice}
+                </small>
               </button>
             );
           })}
         </div>
       </div>
 
+      {/* Seat Map View Button */}
+      <div className="text-center mb-4">
+        <button
+          className={`btn ${seatMapUrl ? 'btn-info text-white' : 'btn-outline-secondary'} fw-bold px-4 py-2`}
+          disabled={!seatMapUrl}
+          onClick={() => setShowMapModal(true)}
+        >
+          {seatMapUrl ? '🗺️ View Theatre Seat Map Layout' : '🗺️ View Theatre Seat Map Layout (No map available)'}
+        </button>
+      </div>
+
       {/* Screen Indicator */}
-      <div className="text-center mb-5">
+      <div className="text-center mb-4">
         <div 
-          className="bg-dark text-white py-2 mx-auto rounded-3 shadow-sm mb-2" 
-          style={{ width: '80%', letterSpacing: '4px', borderBottom: '4px solid #0d6efd' }}
+          className="bg-dark text-white py-2 mx-auto rounded-3 shadow-sm mb-2 fw-bold" 
+          style={{ width: '90%', maxWidth: '800px', letterSpacing: '4px', borderBottom: '4px solid #0d6efd' }}
         >
           SCREEN THIS WAY 🎬
         </div>
-        <small className="text-muted">All eyes this way!</small>
       </div>
 
-      {/* Seat Grid Layout */}
-      <div className="d-flex flex-column align-items-center mb-4">
-        {rows.map((row) => (
-          <div key={row} className="d-flex gap-2 mb-2 align-items-center">
-            <span className="fw-bold me-2 text-muted" style={{ width: '20px' }}>{row}</span>
-            {cols.map((col) => {
-              const seatId = `${row}${col}`;
-              const isSelected = selectedSeats.includes(seatId);
-              const isBooked = bookedSeats.includes(seatId);
+      {/* Seat Grid - 5 Rows of 20 Seats */}
+      <div className="overflow-auto mb-4 pb-2">
+        <div className="d-flex flex-column align-items-center" style={{ minWidth: '850px' }}>
+          {seatRows.map((rowSeats, rowIndex) => (
+            <div key={rowIndex} className="d-flex gap-1 mb-2 align-items-center">
+              {rowSeats.map((seatNum) => {
+                const seatId = String(seatNum);
+                const isSelected = selectedSeats.includes(seatId);
+                const isBooked = bookedSeats.includes(seatId);
 
-              let btnClass = 'btn-outline-secondary';
-              if (isBooked) btnClass = 'btn-secondary text-decoration-line-through';
-              else if (isSelected) btnClass = 'btn-success';
+                let btnClass = 'btn-outline-secondary';
+                if (isBooked) btnClass = 'btn-secondary text-decoration-line-through';
+                else if (isSelected) btnClass = 'btn-success';
 
-              return (
-                <button
-                  key={seatId}
-                  disabled={isBooked}
-                  onClick={() => toggleSeat(seatId)}
-                  className={`btn ${btnClass} btn-sm fw-bold`}
-                  style={{ width: '42px', height: '42px' }}
-                >
-                  {col}
-                </button>
-              );
-            })}
-          </div>
-        ))}
+                return (
+                  <button
+                    key={seatId}
+                    disabled={isBooked}
+                    onClick={() => toggleSeat(seatId)}
+                    className={`btn ${btnClass} btn-sm p-0 fw-bold`}
+                    style={{ width: '38px', height: '38px', fontSize: '0.8rem' }}
+                    title={isBooked ? `Seat ${seatId} (Booked)` : `Seat ${seatId}`}
+                  >
+                    {seatNum}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* Seat Status Legend */}
+      {/* Legend */}
       <div className="d-flex justify-content-center gap-4 mb-4">
-        <div><span className="badge bg-outline-secondary border text-dark p-2">Available</span></div>
+        <div><span className="badge bg-white border text-dark p-2">Available</span></div>
         <div><span className="badge bg-success p-2">Selected</span></div>
         <div><span className="badge bg-secondary p-2">Booked / Occupied</span></div>
       </div>
 
-      {/* Booking Summary Box */}
+      {/* Summary Box */}
       <div className="card shadow border-0 p-4 mx-auto" style={{ maxWidth: '500px' }}>
         <h4 className="fw-bold text-center mb-3">Booking Summary</h4>
+        <p className="mb-2"><strong>Show Date:</strong> {selectedShow?.showDate || 'N/A'}</p>
         <p className="mb-2"><strong>Show Time:</strong> {selectedShow?.showTime || 'N/A'}</p>
         <p className="mb-2"><strong>Selected Seats:</strong> {selectedSeats.length > 0 ? selectedSeats.join(', ') : 'None'}</p>
         <p className="mb-2"><strong>Price per Ticket:</strong> LKR {ticketPrice}</p>
@@ -182,7 +239,8 @@ export const SeatSelection: React.FC = () => {
           onClick={() => navigate('/payment', {
             state: {
               movieId: id,
-              showId: selectedShow?.showId ?? selectedShow?.id,
+              showId: selectedShow?.id ?? selectedShow?.showId,
+              selectedDate: selectedShow?.showDate,
               selectedTime: selectedShow?.showTime,
               selectedSeats: selectedSeats,
               ticketPrice: ticketPrice,
@@ -193,6 +251,41 @@ export const SeatSelection: React.FC = () => {
           Proceed to Pay 💳
         </button>
       </div>
+
+      {/* Seat Map Modal */}
+      {showMapModal && seatMapUrl && (
+        <div className="modal show d-block" tabIndex={-1} style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}>
+          <div className="modal-dialog modal-lg modal-dialog-centered">
+            <div className="modal-content">
+              <div className="modal-header">
+                <h5 className="modal-title fw-bold">Theatre Seat Map Layout</h5>
+                <button 
+                  type="button" 
+                  className="btn-close" 
+                  onClick={() => setShowMapModal(false)}
+                ></button>
+              </div>
+              <div className="modal-body text-center p-3">
+                <img 
+                  src={seatMapUrl} 
+                  alt="Theatre Seat Map Layout" 
+                  className="img-fluid rounded shadow-sm"
+                  style={{ maxHeight: '70vh', objectFit: 'contain' }}
+                />
+              </div>
+              <div className="modal-footer">
+                <button 
+                  type="button" 
+                  className="btn btn-secondary" 
+                  onClick={() => setShowMapModal(false)}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

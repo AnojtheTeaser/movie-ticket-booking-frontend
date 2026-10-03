@@ -66,8 +66,9 @@ export interface TheatreDTO {
   theatreId?: number;
   name: string;
   location: string;
-  capacity?: number;
+  capacity: number;
   status: TheatreStatus;
+  seatMapUrl?: string; 
 }
 
 export interface ShowDTO {
@@ -75,10 +76,12 @@ export interface ShowDTO {
   showId?: number;
   movieId: number;
   theatreId: number;
+  capacity?: number;     
+  seatMapUrl?: string;   
   showDate: string;
   showTime: string;
   ticketPrice: number;
-  status: ShowStatus;
+  status?: ShowStatus | string;
 }
 
 export interface BookingDTO {

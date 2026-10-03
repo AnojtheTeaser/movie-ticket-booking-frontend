@@ -56,6 +56,11 @@ export const movieService = {
     return response.data;
   },
 
+  updateTheatre: async (id: number, theatreData: TheatreDTO) => {
+    const response = await api.put<TheatreDTO>(`/v1/theatres/${id}`, theatreData);
+    return response.data;
+  },
+
   deleteTheatre: async (id: number) => {
     await api.delete(`/v1/theatres/${id}`);
   },
@@ -73,6 +78,11 @@ export const movieService = {
 
   createShow: async (showData: ShowDTO) => {
     const response = await api.post<ShowDTO>('/v1/shows', showData);
+    return response.data;
+  },
+
+  updateShow: async (id: number, showData: ShowDTO) => {
+    const response = await api.put<ShowDTO>(`/v1/shows/${id}`, showData);
     return response.data;
   },
 
