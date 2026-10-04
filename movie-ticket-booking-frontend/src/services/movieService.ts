@@ -90,7 +90,7 @@ export const movieService = {
     await api.delete(`/v1/shows/${id}`);
   },
 
-  // Booking & Payment Services
+  
   createBooking: async (bookingData: BookingDTO) => {
     const response = await api.post<BookingDTO>('/v1/bookings', bookingData);
     return response.data;
@@ -101,7 +101,18 @@ export const movieService = {
     return response.data;
   },
 
-  // Get Booked Seats by Show ID
+  // Booking Update  (@PutMapping("/{id}"))
+  updateBooking: async (id: number, bookingData: BookingDTO) => {
+    const response = await api.put<BookingDTO>(`/v1/bookings/${id}`, bookingData);
+    return response.data;
+  },
+
+  // Booking Cancel  (@DeleteMapping("/{id}"))
+  cancelBooking: async (id: number) => {
+    await api.delete(`/v1/bookings/${id}`);
+  },
+
+  //Get Booked Seats  (@GetMapping("/show/{showId}/seats"))
   getBookedSeatsByShowId: async (showId: number): Promise<string[]> => {
     const response = await api.get<string[]>(`/v1/bookings/show/${showId}/seats`);
     return response.data;

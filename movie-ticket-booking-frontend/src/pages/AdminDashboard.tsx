@@ -28,6 +28,7 @@ export const AdminDashboard: React.FC = () => {
     genre: '',
     durationMinutes: 120,
     language: 'English',
+    releaseDate: '',
     description: '',
     posterUrl: '',
     status: MovieStatus.NOW_SHOWING
@@ -37,7 +38,7 @@ export const AdminDashboard: React.FC = () => {
     name: '',
     location: '',
     capacity: 100,
-    seatMapUrl: '', // Optional seat map URL
+    seatMapUrl: '',
     status: TheatreStatus.ACTIVE
   };
 
@@ -64,17 +65,48 @@ export const AdminDashboard: React.FC = () => {
     setTimeout(() => setMessage(null), 4000);
   };
 
+  const isExpiredShow = (show: ShowDTO) => {
+    if (!show.showDate || !show.showTime) return false;
+    try {
+      const showDateTimeStr = `${show.showDate}T${show.showTime}`;
+      const showDateTime = new Date(showDateTimeStr).getTime();
+      const currentDateTime = new Date().getTime();
+      return showDateTime < currentDateTime;
+    } catch {
+      return false;
+    }
+  };
+
   const loadAllData = async () => {
     setLoading(true);
     try {
-      const [moviesData, theatresData, showsData] = await Promise.all([
+      const [moviesData, theatresData, fetchedShows] = await Promise.all([
         movieService.getAllMovies().catch(() => []),
         movieService.getAllTheatres().catch(() => []),
         movieService.getAllShows().catch(() => [])
       ]);
+
       setMovies(moviesData);
       setTheatres(theatresData);
-      setShows(showsData);
+
+      const updatedShows = await Promise.all(
+        fetchedShows.map(async (show) => {
+          const showId = show.showId ?? show.id;
+          if (show.status === ShowStatus.SCHEDULED && isExpiredShow(show) && showId) {
+            try {
+              const updated = { ...show, status: ShowStatus.COMPLETED };
+              await movieService.updateShow(showId, updated);
+              return updated;
+            } catch (e) {
+              console.error('Failed to auto-update expired show:', e);
+              return show;
+            }
+          }
+          return show;
+        })
+      );
+
+      setShows(updatedShows);
     } catch (err) {
       showNotification('danger', 'Failed to fetch admin data.');
     } finally {
@@ -196,14 +228,36 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
-  const handleDeleteShow = async (id: number) => {
-    if (!window.confirm('Are you sure you want to delete this show?')) return;
+  const handleDeleteShow = async (show: ShowDTO) => {
+    const id = show.showId ?? show.id;
+    if (!id) return;
+
+    if (!window.confirm('Are you sure you want to cancel this show? Status will be changed to CANCELLED.')) return;
+
     try {
-      await movieService.deleteShow(id);
-      showNotification('success', 'Show deleted successfully!');
+      const updatedShowData: ShowDTO = {
+        ...show,
+        status: ShowStatus.CANCELLED
+      };
+
+      await movieService.updateShow(id, updatedShowData);
+      showNotification('success', 'Show cancelled successfully!');
       loadAllData();
     } catch (err) {
-      showNotification('danger', 'Failed to delete show.');
+      showNotification('danger', 'Failed to cancel show.');
+    }
+  };
+
+  const getStatusBadge = (status?: ShowStatus | string) => {
+    switch (status) {
+      case ShowStatus.SCHEDULED:
+        return <span className="badge bg-success">SCHEDULED</span>;
+      case ShowStatus.COMPLETED:
+        return <span className="badge bg-secondary">COMPLETED</span>;
+      case ShowStatus.CANCELLED:
+        return <span className="badge bg-danger">CANCELLED</span>;
+      default:
+        return <span className="badge bg-info">{status || 'UNKNOWN'}</span>;
     }
   };
 
@@ -251,7 +305,7 @@ export const AdminDashboard: React.FC = () => {
             className={`nav-link ${activeTab === 'shows' ? 'active fw-bold' : ''}`} 
             onClick={() => setActiveTab('shows')}
           >
-            🎟️ Schedule Shows
+            🎟️️ Schedule Shows
           </button>
         </li>
       </ul>
@@ -273,15 +327,19 @@ export const AdminDashboard: React.FC = () => {
                 </div>
                 <div className="mb-2">
                   <label className="form-label">Duration (mins)</label>
-                  <input type="number" className="form-control" value={newMovie.durationMinutes} onChange={e => setNewMovie({...newMovie, durationMinutes: Number(e.target.value)})} required min="1" />
+                  <input type="number" className="form-control" value={newMovie.durationMinutes || ''} onChange={e => setNewMovie({...newMovie, durationMinutes: Number(e.target.value)})} required min="1" />
                 </div>
                 <div className="mb-2">
                   <label className="form-label">Language</label>
-                  <input type="text" className="form-control" value={newMovie.language} onChange={e => setNewMovie({...newMovie, language: e.target.value})} />
+                  <input type="text" className="form-control" value={newMovie.language || ''} onChange={e => setNewMovie({...newMovie, language: e.target.value})} />
+                </div>
+                <div className="mb-2">
+                  <label className="form-label">Release Date</label>
+                  <input type="date" className="form-control" value={newMovie.releaseDate || ''} onChange={e => setNewMovie({...newMovie, releaseDate: e.target.value})} required />
                 </div>
                 <div className="mb-2">
                   <label className="form-label">Description</label>
-                  <textarea className="form-control" rows={2} value={newMovie.description} onChange={e => setNewMovie({...newMovie, description: e.target.value})} />
+                  <textarea className="form-control" rows={2} value={newMovie.description || ''} onChange={e => setNewMovie({...newMovie, description: e.target.value})} />
                 </div>
                 <div className="mb-2">
                   <label className="form-label">Status</label>
@@ -311,6 +369,8 @@ export const AdminDashboard: React.FC = () => {
                       <tr>
                         <th>Title</th>
                         <th>Genre</th>
+                        <th>Duration</th>
+                        <th>Release Date</th>
                         <th>Status</th>
                         <th className="text-center">Action</th>
                       </tr>
@@ -322,6 +382,8 @@ export const AdminDashboard: React.FC = () => {
                           <tr key={id}>
                             <td className="fw-bold">{m.title}</td>
                             <td>{m.genre}</td>
+                            <td>{m.durationMinutes ? `${m.durationMinutes} mins` : 'N/A'}</td>
+                            <td>{m.releaseDate || 'N/A'}</td>
                             <td><span className="badge bg-info">{m.status}</span></td>
                             <td className="text-center">
                               {id && (
@@ -472,7 +534,7 @@ export const AdminDashboard: React.FC = () => {
                   </div>
 
                   <div className="col-md-4">
-                    <label className="form-label fw-semibold">Ticket Price ($)</label>
+                    <label className="form-label fw-semibold">Ticket Price (LKR)</label>
                     <input type="number" className="form-control" value={newShow.ticketPrice} onChange={e => setNewShow({...newShow, ticketPrice: Number(e.target.value)})} required min="0" step="0.01" />
                   </div>
 
@@ -512,6 +574,7 @@ export const AdminDashboard: React.FC = () => {
                         <th>Show Date</th>
                         <th>Show Time</th>
                         <th>Price</th>
+                        <th>Status</th>
                         <th className="text-center">Action</th>
                       </tr>
                     </thead>
@@ -528,16 +591,19 @@ export const AdminDashboard: React.FC = () => {
                             <td className="fw-bold">{matchedTheatre ? `${matchedTheatre.name} (${matchedTheatre.location})` : 'Unknown'}</td>
                             <td>{s.showDate}</td>
                             <td><span className="badge bg-info text-dark">{s.showTime}</span></td>
-                            <td className="fw-bold text-success">${s.ticketPrice}</td>
+                            <td className="fw-bold text-success">LKR {s.ticketPrice}</td>
+                            <td>{getStatusBadge(s.status as ShowStatus)}</td>
                             <td className="text-center">
                               {id && (
                                 <>
                                   <button className="btn btn-outline-warning btn-sm me-2" onClick={() => setEditingShow(s)}>
                                     Edit
                                   </button>
-                                  <button className="btn btn-outline-danger btn-sm" onClick={() => handleDeleteShow(id)}>
-                                    Delete
-                                  </button>
+                                  {s.status !== ShowStatus.CANCELLED && (
+                                    <button className="btn btn-outline-danger btn-sm" onClick={() => handleDeleteShow(s)}>
+                                      Cancel / Soft Delete
+                                    </button>
+                                  )}
                                 </>
                               )}
                             </td>
@@ -574,11 +640,15 @@ export const AdminDashboard: React.FC = () => {
                   </div>
                   <div className="mb-2">
                     <label className="form-label">Duration (mins)</label>
-                    <input type="number" className="form-control" value={editingMovie.durationMinutes} onChange={e => setEditingMovie({...editingMovie, durationMinutes: Number(e.target.value)})} required min="1" />
+                    <input type="number" className="form-control" value={editingMovie.durationMinutes || ''} onChange={e => setEditingMovie({...editingMovie, durationMinutes: Number(e.target.value)})} required min="1" />
                   </div>
                   <div className="mb-2">
                     <label className="form-label">Language</label>
-                    <input type="text" className="form-control" value={editingMovie.language} onChange={e => setEditingMovie({...editingMovie, language: e.target.value})} />
+                    <input type="text" className="form-control" value={editingMovie.language || ''} onChange={e => setEditingMovie({...editingMovie, language: e.target.value})} />
+                  </div>
+                  <div className="mb-2">
+                    <label className="form-label">Release Date</label>
+                    <input type="date" className="form-control" value={editingMovie.releaseDate || ''} onChange={e => setEditingMovie({...editingMovie, releaseDate: e.target.value})} required />
                   </div>
                   <div className="mb-2">
                     <label className="form-label">Description</label>
@@ -680,7 +750,7 @@ export const AdminDashboard: React.FC = () => {
                     </select>
                   </div>
                   <div className="mb-2">
-                    <label className="form-label fw-semibold">Ticket Price ($)</label>
+                    <label className="form-label fw-semibold">Ticket Price (LKR)</label>
                     <input type="number" className="form-control" value={editingShow.ticketPrice} onChange={e => setEditingShow({...editingShow, ticketPrice: Number(e.target.value)})} required min="0" step="0.01" />
                   </div>
                   <div className="mb-2">
@@ -690,6 +760,14 @@ export const AdminDashboard: React.FC = () => {
                   <div className="mb-2">
                     <label className="form-label fw-semibold">Show Time</label>
                     <input type="time" className="form-control" value={editingShow.showTime} onChange={e => setEditingShow({...editingShow, showTime: e.target.value})} required />
+                  </div>
+                  <div className="mb-2">
+                    <label className="form-label fw-semibold">Status</label>
+                    <select className="form-select" value={editingShow.status} onChange={e => setEditingShow({...editingShow, status: e.target.value as ShowStatus})}>
+                      <option value={ShowStatus.SCHEDULED}>SCHEDULED</option>
+                      <option value={ShowStatus.COMPLETED}>COMPLETED</option>
+                      <option value={ShowStatus.CANCELLED}>CANCELLED</option>
+                    </select>
                   </div>
                 </div>
                 <div className="modal-footer">

@@ -16,6 +16,19 @@ export const SeatSelection: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [showMapModal, setShowMapModal] = useState<boolean>(false);
 
+  // Expired Shows filter කිරීම සඳහා Helper Function එක
+  const isExpiredShow = (show: ShowDTO) => {
+    if (!show.showDate || !show.showTime) return false;
+    try {
+      const showDateTimeStr = `${show.showDate}T${show.showTime}`;
+      const showDateTime = new Date(showDateTimeStr).getTime();
+      const currentDateTime = new Date().getTime();
+      return showDateTime < currentDateTime;
+    } catch {
+      return false;
+    }
+  };
+
   useEffect(() => {
     if (id) {
       setLoading(true);
@@ -38,9 +51,13 @@ export const SeatSelection: React.FC = () => {
           }
           setTheatresMap(tMap);
 
-          setShows(showsData || []);
-          if (showsData && showsData.length > 0) {
-            setSelectedShow(showsData[0]);
+          // Filter out all expired shows
+          const rawShows = showsData || [];
+          const activeUpcomingShows = rawShows.filter((show) => !isExpiredShow(show));
+
+          setShows(activeUpcomingShows);
+          if (activeUpcomingShows.length > 0) {
+            setSelectedShow(activeUpcomingShows[0]);
           }
         })
         .catch((err) => {
@@ -117,7 +134,7 @@ export const SeatSelection: React.FC = () => {
   if (error || shows.length === 0) {
     return (
       <div className="container mt-5 text-center">
-        <h4 className="text-danger">{error || 'No active shows available for this movie.'}</h4>
+        <h4 className="text-danger">{error || 'No active or upcoming shows available for this movie.'}</h4>
         <button className="btn btn-secondary mt-3" onClick={() => navigate(-1)}>
           &larr; Back to Details
         </button>

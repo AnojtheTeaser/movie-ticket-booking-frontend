@@ -11,7 +11,6 @@ export const MovieList: React.FC = () => {
   const [error, setError] = useState<string>('');
 
   useEffect(() => {
-    
     if (auth?.isAuthenticated) {
       const fetchMovies = async () => {
         try {
@@ -30,11 +29,9 @@ export const MovieList: React.FC = () => {
     }
   }, [auth?.isAuthenticated]);
 
-  // Fallback Image for missing posters
   const fallbackImage =
     "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='300' height='400' viewBox='0 0 300 400'><rect width='100%' height='100%' fill='%23cccccc'/><text x='50%' y='50%' dominant-baseline='middle' text-anchor='middle' font-family='sans-serif' font-size='20' fill='%23666666'>No Poster Available</text></svg>";
 
-  // 1. No logong show Welcome Banner 
   if (!auth?.isAuthenticated) {
     return (
       <div className="container text-center mt-5 py-5">
@@ -56,7 +53,6 @@ export const MovieList: React.FC = () => {
     );
   }
 
-  // 2. Loading State
   if (loading) {
     return (
       <div className="container mt-5 text-center">
@@ -67,7 +63,6 @@ export const MovieList: React.FC = () => {
     );
   }
 
-  // 3. Error State
   if (error) {
     return (
       <div className="container mt-5">
@@ -76,7 +71,6 @@ export const MovieList: React.FC = () => {
     );
   }
 
-  // Show Movies to Logged-in User  
   return (
     <div className="container mt-4">
       <h2 className="mb-4 text-center fw-bold">Now Showing Movies</h2>
@@ -103,16 +97,25 @@ export const MovieList: React.FC = () => {
                   />
                   <div className="card-body d-flex flex-column">
                     <h5 className="card-title fw-bold">{movie.title}</h5>
+                    
                     <p className="card-text text-muted mb-1">
                       <small>
                         <strong>Genre:</strong> {movie.genre}
                       </small>
                     </p>
-                    <p className="card-text text-muted mb-3">
+
+                    <p className="card-text text-muted mb-1">
                       <small>
-                        <strong>Duration:</strong> {movie.durationMinutes} mins
+                        <strong>Duration:</strong> {movie.durationMinutes ? `${movie.durationMinutes} mins` : 'N/A'}
                       </small>
                     </p>
+
+                    <p className="card-text text-muted mb-3">
+                      <small>
+                        <strong>Release Date:</strong> {movie.releaseDate || 'N/A'}
+                      </small>
+                    </p>
+
                     <div className="mt-auto">
                       <Link to={`/movies/${id}`} className="btn btn-primary w-100 fw-bold">
                         Book Tickets

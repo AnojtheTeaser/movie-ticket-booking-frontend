@@ -40,6 +40,20 @@ export const MovieDetails: React.FC = () => {
     fetchMovieDetails();
   }, [id]);
 
+  const isExpiredShow = (show?: ShowDTO | null) => {
+    if (!show || !show.showDate || !show.showTime) return false;
+
+    try {
+      const showDateTimeStr = `${show.showDate}T${show.showTime}`;
+      const showDateTime = new Date(showDateTimeStr).getTime();
+      const currentDateTime = new Date().getTime();
+
+      return showDateTime < currentDateTime;
+    } catch {
+      return false;
+    }
+  };
+
   const getTheatreName = (theatreId: number) => {
     const theatre = theatres.find(t => (t.theatreId ?? t.id) === theatreId);
     return theatre ? `${theatre.name} (${theatre.location})` : `Theatre #${theatreId}`;
@@ -72,6 +86,8 @@ export const MovieDetails: React.FC = () => {
     );
   }
 
+  const activeShows = shows.filter(show => !isExpiredShow(show));
+
   return (
     <div className="container mt-5 mb-5">
       <button className="btn btn-outline-secondary mb-4" onClick={() => navigate(-1)}>
@@ -97,10 +113,15 @@ export const MovieDetails: React.FC = () => {
             <div className="card-body p-4 d-flex flex-column h-100">
               <h2 className="card-title fw-bold mb-3">{movie.title}</h2>
               
-              <div className="mb-3">
-                <span className="badge bg-primary me-2 fs-6">{movie.genre}</span>
-                <span className="badge bg-secondary me-2 fs-6">{movie.language}</span>
-                <span className="badge bg-info text-dark fs-6">{movie.durationMinutes || 'N/A'} mins</span>
+              <div className="mb-3 d-flex flex-wrap align-items-center gap-2">
+                <span className="badge bg-primary fs-6">{movie.genre}</span>
+                {movie.language && <span className="badge bg-secondary fs-6">{movie.language}</span>}
+                <span className="badge bg-info text-dark fs-6">
+                  {movie.durationMinutes ? `${movie.durationMinutes} mins` : 'N/A'}
+                </span>
+                {movie.releaseDate && (
+                  <span className="badge bg-dark fs-6">📅 Release: {movie.releaseDate}</span>
+                )}
               </div>
 
               <h5 className="fw-bold mt-2">Overview</h5>
@@ -114,13 +135,13 @@ export const MovieDetails: React.FC = () => {
 
       {/* Showtimes & Theatre Selection Section */}
       <h3 className="fw-bold mb-4">🎟️ Select Show & Theatre</h3>
-      {shows.length === 0 ? (
+      {activeShows.length === 0 ? (
         <div className="alert alert-warning text-center">
-          No shows currently scheduled for this movie. Please check back later!
+          No upcoming shows currently scheduled for this movie. Please check back later!
         </div>
       ) : (
         <div className="row g-3">
-          {shows.map((show) => {
+          {activeShows.map((show) => {
             const showId = show.showId ?? show.id;
             const movieId = movie.movieId ?? movie.id;
 

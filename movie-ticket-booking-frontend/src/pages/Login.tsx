@@ -21,15 +21,15 @@ export const Login: React.FC = () => {
       const response = await authService.login({ email, password });
 
       if (response.token) {
-        // Admin ද නැද්ද කියා Email/Response අනුව Role එක තීරණය කිරීම
+        // Determine user role based on email or server response
         const role = email === 'admindasun@gmail.com' ? 'ADMIN' : 'CUSTOMER';
         
-        // AuthContext එක හරහා Global State Update කිරීම
+       // Update global state via AuthContext
         if (auth) {
           auth.login(response.token, email, role);
         }
 
-        // Role එක අනුව Navigate කිරීම
+        //  Navigate by Role 
         if (role === 'ADMIN') {
           navigate('/admin');
         } else {
